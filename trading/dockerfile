@@ -1,0 +1,38 @@
+# ── 基础镜像 ──────────────────────────────────────────────────────────────────
+# 使用官方 Python 3.13 slim 镜像（去掉了大量不必要的系统工具，体积更小）
+FROM python:3.13-slim
+
+# ── 注入 uv ───────────────────────────────────────────────────────────────────
+# 通过多阶段构建的 COPY --from 语法，直接从 uv 官方镜像里复制二进制文件
+# 这是官方推荐的最简单注入方式：不污染 pip，不依赖 curl/apt
+# uv 只是一个静态编译的单文件二进制，放入 PATH 即可使用
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# ── 虚拟环境路径 ──────────────────────────────────────────────────────────────
+# 将 venv 放在 /opt/venv 而非工作目录内，避免被 Dev Container 的 bind mount 遮盖
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+
+# ── 工作目录 ──────────────────────────────────────────────────────────────────
+WORKDIR /app
+
+# ── 安装依赖（利用 Docker 层缓存）────────────────────────────────────────────
+# 先只复制依赖声明文件，尚不复制源代码
+# 原因：只要 pyproject.toml 不变，这一层就会被缓存，重建时无需重新安装依赖
+COPY pyproject.toml .
+
+# uv sync：读取 pyproject.toml，在 .venv/ 目录下创建虚拟环境并安装依赖
+#   --no-dev          跳过开发依赖（本项目未定义，但养成好习惯）
+#   --no-install-project  不把当前目录作为 Python 包安装（我们只是一个脚本）
+RUN uv sync --no-dev --no-install-project
+
+# ── 复制源代码 ────────────────────────────────────────────────────────────────
+# 放在依赖安装之后，确保修改代码时不会触发重新安装依赖
+COPY trading_sim.py .
+
+# ── 容器启动入口 ──────────────────────────────────────────────────────────────
+# 使用 ENTRYPOINT 的 exec 形式（JSON 数组，非 shell 字符串）
+# exec 形式：Python 进程直接成为容器的 PID 1
+#   - docker stop / docker compose stop 发出的 SIGTERM 直接到达 Python 进程
+#   - Python 可以捕获 SIGTERM 做清理工作后优雅退出
+#   - shell 形式（CMD python ...）会让 sh 成为 PID 1，它不会转发信号给子进程
+ENTRYPOINT ["/opt/venv/bin/python", "trading_sim.py"]

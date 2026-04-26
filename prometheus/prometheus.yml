@@ -1,0 +1,59 @@
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │  Prometheus 主配置文件                                                       │
+# │  官方文档：https://prometheus.io/docs/prometheus/latest/configuration/       │
+# └─────────────────────────────────────────────────────────────────────────────┘
+
+# ══════════════════════════════════════════════════════════════════════════════
+# global：全局默认值
+# 所有 scrape_configs 里的 job 都会继承这里的设置，除非 job 级别单独覆盖
+# ══════════════════════════════════════════════════════════════════════════════
+global:
+
+  # scrape_interval：抓取间隔
+  # Prometheus 每隔这么长时间，就去访问一次各目标（target）的 /metrics 端点
+  # 演示环境设为 5s，可以看到数据更新更快
+  # 生产环境通常设为 15s（官方默认值）或 30s，以减少网络和 CPU 开销
+  scrape_interval: 2s
+
+  # scrape_timeout：单次抓取的超时时间
+  # 若目标在此时间内未返回完整响应，本次抓取标记为失败（target 状态变为 down）
+  # 必须 ≤ scrape_interval，否则 Prometheus 启动时报配置错误
+  scrape_timeout: 1s
+
+  # evaluation_interval：规则（rules）的评估间隔
+  # Prometheus 支持两种规则：recording rules（预计算）和 alerting rules（告警）
+  # 本演示未加载任何规则文件，但保留此字段以作说明
+  # 官方默认值为 1m
+  evaluation_interval: 15s
+
+# ══════════════════════════════════════════════════════════════════════════════
+# scrape_configs：抓取任务列表
+# 每个 job 定义"去哪里抓"以及"怎么抓"
+# 可以配置多个 job，每个 job 对应一组目标
+# ══════════════════════════════════════════════════════════════════════════════
+scrape_configs:
+
+  # ── job：trading ────────────────────────────────────────────────────────────
+  - job_name: "trading"
+    # job_name：该任务的唯一名称
+    # Prometheus 会自动将此名称作为 job 标签（label）附加到每条抓取到的时序上
+    # 例：trading_price{job="trading", instance="trading:8000"} 100.23
+    # 这样在 PromQL 查询时可以用 {job="trading"} 来过滤只属于本服务的指标
+
+    # static_configs：静态目标配置
+    # 最简单的目标发现方式：直接写死目标地址列表
+    # 生产环境可换用动态服务发现，如 kubernetes_sd_configs、consul_sd_configs 等
+    # 官方服务发现文档：https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config
+    static_configs:
+
+      - targets: ["trading:8000"]
+        # targets：目标地址列表，格式为 "host:port"
+        # 关键：这里写服务名 "trading"，而不是 "localhost"
+        # 原因：Docker Compose 会为项目创建一个私有桥接网络（bridge network），
+        #       容器之间通过 Docker 内嵌的 DNS 服务，用服务名解析到对方的容器 IP
+        #       从 Prometheus 容器的视角看，"localhost" 只代表它自己，
+        #       必须用服务名 "trading" 才能访问交易程序容器
+        #
+        # Prometheus 默认拼接访问路径为 http://<target>/metrics
+        # 即：http://trading:8000/metrics
+        # 如需修改路径，可在此 job 下加 metrics_path: /custom/path

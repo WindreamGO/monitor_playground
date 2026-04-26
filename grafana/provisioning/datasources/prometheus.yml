@@ -1,0 +1,67 @@
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │  Grafana 数据源（Datasource）Provisioning 配置文件                           │
+# │  官方文档：https://grafana.com/docs/grafana/latest/administration/           │
+# │            provisioning/#data-sources                                        │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# 【机制说明】
+# Grafana 启动时会扫描 /etc/grafana/provisioning/datasources/ 目录下的所有 YAML 文件，
+# 将其中声明的数据源写入 Grafana 内部的 SQLite 数据库。
+# 这样做的好处是：数据源配置以文件形式版本管理，无需手动在 UI 中点击添加。
+
+# apiVersion：Provisioning 配置文件的 API 版本号
+# 目前 Grafana 只支持版本 1，固定写 1 即可
+apiVersion: 1
+
+# datasources：要预置的数据源列表
+# 每个列表项对应一个数据源，可以同时声明多个（如同时连 Prometheus + Loki）
+datasources:
+
+    # name：数据源在 Grafana UI 中显示的名称
+    # 会出现在面板编辑器的数据源下拉列表中
+  - name: Prometheus
+
+    # type：数据源的插件类型标识符
+    # "prometheus" 是 Grafana 内置插件，无需额外安装
+    # 其他常见类型：loki、elasticsearch、mysql、postgres 等
+    type: prometheus
+
+    # access：数据访问模式，决定"谁"去请求 Prometheus 的 HTTP API
+    #
+    #   proxy（推荐，本项目使用）：
+    #     请求链路：浏览器 → Grafana 后端服务器 → Prometheus
+    #     Grafana 后端作为反向代理，替浏览器向 Prometheus 发出查询请求
+    #     优点：Prometheus 端口无需暴露给外网；浏览器跨域问题由 Grafana 处理
+    #
+    #   direct（已废弃，不推荐）：
+    #     请求链路：浏览器 → Prometheus（直接访问）
+    #     Prometheus 必须在浏览器可访问的网络中，且要处理 CORS 问题
+    access: proxy
+
+    # url：Prometheus 服务的 HTTP 地址
+    # 注意：这里写 "prometheus"（Docker Compose 服务名），不是 "localhost"
+    # 原因：此 URL 是由 Grafana 容器发出的请求，"localhost" 在容器内指向自身
+    # Docker 内嵌 DNS 会将服务名 "prometheus" 解析为对应容器的内部 IP
+    url: http://prometheus:9090
+
+    # uid：数据源的唯一标识符（Unique ID）
+    # 作用：dashboard JSON 文件中的面板通过这个 uid 来引用本数据源
+    # 如果不显式指定，Grafana 会随机生成一个 uid，每次重建容器可能不同
+    # 固定 uid 可确保 dashboard JSON 中的数据源引用在重启后始终有效
+    uid: prometheus-trading
+
+    # isDefault：是否将此数据源设为默认
+    # true → 新建面板时若未指定数据源，自动使用此数据源
+    isDefault: true
+
+    # editable：是否允许用户在 Grafana UI 中修改此数据源的设置
+    # false → 只读，防止 UI 修改与此文件的配置产生不一致
+    # 如果需要在 UI 中临时调试，可以改为 true
+    editable: false
+
+    # version：Provisioning 版本号（整数）
+    # Grafana 将此值与数据库中存储的版本对比：
+    #   - 文件版本 > 数据库版本 → 重新应用配置
+    #   - 文件版本 ≤ 数据库版本 → 跳过（不更新）
+    # 所以：修改了上面任何字段后，必须递增此值，重启 Grafana 才会生效
+    version: 1

@@ -1,0 +1,68 @@
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │  Grafana Dashboard Provider 配置文件                                         │
+# │  官方文档：https://grafana.com/docs/grafana/latest/administration/           │
+# │            provisioning/#dashboards                                          │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# 【机制说明】
+# Dashboard provisioning 分为两个步骤：
+#   步骤一（本文件）：定义一个"provider"，告诉 Grafana 去哪个目录扫描 JSON 文件
+#   步骤二（JSON 文件）：在上述目录中放置 Grafana dashboard 的 JSON 定义文件
+#
+# Grafana 启动时读取本文件 → 知道去 /var/lib/grafana/dashboards/ 扫描 JSON
+# 扫描到 JSON 文件 → 将 dashboard 导入 Grafana 数据库，用户打开 UI 即可看到
+
+# apiVersion：Provisioning API 版本，固定写 1
+apiVersion: 1
+
+# providers：dashboard provider 列表，可配置多个
+# 每个 provider 对应一个目录，不同目录可对应不同的 Grafana 文件夹（folder）
+providers:
+
+    # name：该 provider 的唯一标识名称
+    # 仅用于 Grafana 日志输出和内部区分，不会显示在 UI 上
+  - name: "trading"
+
+    # orgId：此 provider 归属的 Grafana 组织 ID
+    # Grafana 支持多组织（multi-org），默认只有一个组织，ID 为 1
+    orgId: 1
+
+    # type：provider 的类型
+    # "file" 是最常用的类型，表示从本地文件系统加载 JSON 文件
+    # Grafana 企业版支持其他类型（如从 S3/Git 加载），开源版只支持 file
+    type: file
+
+    # disableDeletion：控制"删除文件后 dashboard 是否也从 Grafana 中删除"
+    #   false（本项目）：从目录删除 JSON 文件后，Grafana 也会删除对应 dashboard
+    #   true：即使删除了 JSON 文件，dashboard 仍保留在 Grafana 数据库中
+    disableDeletion: false
+
+    # updateIntervalSeconds：Grafana 检查目录文件变更的轮询间隔（秒）
+    # 若文件内容发生变化（通过文件 hash 对比），Grafana 自动重新加载 dashboard
+    # 注意：在 macOS / Windows 的 Docker bind mount 下，inotify 文件事件可能不可靠
+    # 设为 10 秒（轮询模式）可确保变更被检测到，而不依赖文件系统事件
+    updateIntervalSeconds: 10
+
+    # allowUiUpdates：是否允许用户在 Grafana UI 中保存对 provisioned dashboard 的修改
+    #
+    #   false（默认，本项目使用）：
+    #     UI 中对 provisioned dashboard 的修改无法保存到数据库
+    #     界面会显示 "Cannot save provisioned dashboard" 的提示
+    #     如需修改：在 UI 中点击 "Dashboard settings → JSON Model"，
+    #     将修改后的 JSON 复制出来，覆盖 ./grafana/dashboards/trading.json
+    #
+    #   true：
+    #     允许在 UI 中保存修改到数据库
+    #     但！每次 Grafana 重启，文件内容都会覆盖数据库中的版本（文件永远获胜）
+    #     因此在 UI 保存的修改重启后会丢失，容易造成混淆
+    allowUiUpdates: false
+
+    # options：该 provider 类型特定的配置项
+    options:
+
+      # path：Grafana 容器内扫描 dashboard JSON 文件的目录路径
+      # 重要：这是容器内的路径，不是宿主机路径！
+      # docker-compose.yml 中必须将宿主机的 ./grafana/dashboards/
+      # 挂载到容器的 /var/lib/grafana/dashboards/
+      # 两者必须一致，否则 Grafana 扫描到的是空目录
+      path: /var/lib/grafana/dashboards

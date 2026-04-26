@@ -1,0 +1,32 @@
+/* ── 整体布局 ─────────────────────────────────────────────────── */
+Screen {
+    background: $surface;
+    layout: vertical;
+}
+
+/* ── 摘要面板行 ───────────────────────────────────────────────── */
+#metrics-row {
+    height: 9;
+    padding: 1 2;
+}
+
+MetricCard {
+    width: 1fr;
+    height: 100%;
+    border: round $accent;
+    content-align: center middle;
+    text-align: center;
+    margin: 0 1;
+}
+
+/* ── 套利信号区域 ─────────────────────────────────────────────── */
+#signals-title {
+    padding: 0 3;
+    color: $text-muted;
+    height: 1;
+}
+
+#signals-table {
+    height: 1fr;
+    margin: 0 2 1 2;
+}
